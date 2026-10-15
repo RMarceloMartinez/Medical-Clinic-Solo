@@ -136,3 +136,27 @@ BEGIN
     END;
 END;
 GO
+
+CREATE OR ALTER TRIGGER TR_Referral_IssuedByPrimary
+ON dbo.Referral
+AFTER INSERT, UPDATE
+AS BEGIN
+SET NOCOUNT ON;
+    IF NOT(UPDATE(PatientID) OR UPDATE(PrimaryID)) RETURN;
+IF EXISTS(
+    SELECT 1
+    FROM inserted AS i
+    WHERE NOT EXISTS(
+                SELECT 1
+                FROM PatientDoctor AS pd
+                WHERE pd.PatientID = i.PatientID
+                AND pd.DoctorID = i.PrimaryID
+                AND pd.RolePlayed = 'Primary'
+              )
+)
+BEGIN 
+    ROLLBACK TRANSACTION;
+    THROW 50004, 'Only the patient primary doctor can issue a referral.', 1;
+    END;
+END;
+GO
