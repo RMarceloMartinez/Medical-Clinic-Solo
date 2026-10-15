@@ -1,0 +1,230 @@
+USE MedicalClinic;
+GO
+
+PRINT '=== Trigger 1: TR_Appointment_DoctorSchedule ===';
+
+-- Test 1: ALLOWED - Ramirez at office 1 on Monday 10:00 (he works Mondays there)
+BEGIN TRY
+    INSERT INTO Appointment (OfficeID, DoctorID, PatientID, ReferralID, Date_Time,
+                             AppointStatus, TotalCost, Channel, CancelReason, CancelledBy)
+    VALUES (1000000, 1000000, 1000006, NULL, '2026-10-19 10:00',
+            'Scheduled', 150.00, 'Phone', NULL, NULL);
+    PRINT 'OK   Test 1: valid appointment was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'FAIL Test 1: valid appointment was rejected: ' + ERROR_MESSAGE();
+END CATCH;
+
+-- Test 2: REJECTED (50001) - Ramirez at office 1 on Tuesday (not scheduled)
+BEGIN TRY
+    INSERT INTO Appointment (OfficeID, DoctorID, PatientID, ReferralID, Date_Time,
+                             AppointStatus, TotalCost, Channel, CancelReason, CancelledBy)
+    VALUES (1000000, 1000000, 1000006, NULL, '2026-10-20 10:00',
+            'Scheduled', 150.00, 'Phone', NULL, NULL);
+    PRINT 'FAIL Test 2: wrong-day appointment was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'OK   Test 2: rejected (' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + '): ' + ERROR_MESSAGE();
+END CATCH;
+
+--Test 3: REJECTED (50001) - Ramirez at the wrong office
+BEGIN TRY
+    INSERT INTO Appointment(OfficeID, DoctorID, PatientID, ReferralID, Date_Time,
+                             AppointStatus, TotalCost, Channel, CancelReason, CancelledBy)
+    VALUES(1000001, 1000000, 1000006, NULL, '2026-10-19 11:00',
+            'Scheduled', 150.00, 'Phone', NULL, NULL);
+        PRINT 'FAIL Test 3: wrong-office appointment was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'OK   Test 3: rejected (' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + '): ' + ERROR_MESSAGE();
+END CATCH;
+
+--Test 4: REJECTED (50002) -Ramirez before opening
+BEGIN TRY
+    INSERT INTO Appointment(OfficeID, DoctorID, PatientID, ReferralID, Date_Time,
+                             AppointStatus, TotalCost, Channel, CancelReason, CancelledBy)
+    VALUES(1000000, 1000000, 1000006, NULL, '2026-10-19 07:59',
+            'Scheduled', 150.00, 'Phone', NULL, NULL);
+        PRINT 'FAIL Test 4: before oppening time appointment was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'OK   Test 4: rejected (' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + '): ' + ERROR_MESSAGE();
+END CATCH;
+
+--Test 5: REJECTED (50002) -Ramirez at closing time
+BEGIN TRY
+    INSERT INTO Appointment(OfficeID, DoctorID, PatientID, ReferralID, Date_Time,
+                             AppointStatus, TotalCost, Channel, CancelReason, CancelledBy)
+    VALUES(1000000, 1000000, 1000006, NULL, '2026-10-19 17:00',
+            'Scheduled', 150.00, 'Phone', NULL, NULL);
+        PRINT 'FAIL Test 5: at closing time appointment was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'OK   Test 5: rejected (' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + '): ' + ERROR_MESSAGE();
+END CATCH;
+
+-- Test 6: ALLOWED - cancelled appointment on Tuesday (wrong day, but cancelled rows are exempt)
+BEGIN TRY
+    INSERT INTO Appointment (OfficeID, DoctorID, PatientID, ReferralID, Date_Time,
+                             AppointStatus, TotalCost, Channel, CancelReason, CancelledBy)
+    VALUES (1000000, 1000000, 1000006, NULL, '2026-10-20 10:00',
+            'Cancelled', 150.00, 'Phone', 'Patient rescheduled', 'Patient');
+    PRINT 'OK   Test 6: valid Cancellation was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'FAIL Test 6: valid appointment was rejected: ' + ERROR_MESSAGE();
+END CATCH;
+
+--Test 7: REJECTED (50001) - multi-row insert, one valid (Wed) + one invalid (Tue) row
+BEGIN TRY
+    INSERT INTO Appointment(OfficeID, DoctorID, PatientID, ReferralID, Date_Time,
+                             AppointStatus, TotalCost, Channel, CancelReason, CancelledBy)
+    VALUES(1000000, 1000000, 1000006, NULL, '2026-10-21 10:00',
+            'Scheduled', 150.00, 'Phone', NULL, NULL),
+          (1000000, 1000000, 1000006, NULL, '2026-10-20 11:00',
+            'Scheduled', 150.00, 'Phone', NULL, NULL);
+        PRINT 'FAIL Test 7: multi-row insert with a bad row was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'OK   Test 7: rejected (' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + '): ' + ERROR_MESSAGE();
+END CATCH;
+SELECT COUNT(*) AS Wed21Rows FROM Appointment WHERE Date_Time = '2026-10-21 10:00';
+
+--Test 8 REJECTED (50001) - bad update
+BEGIN TRY
+    UPDATE Appointment
+    SET Date_Time = '2026-10-20 10:00'
+    WHERE AppointmentID = 1000000;
+        PRINT 'FAIL Test 8: moving an appointment to an unscheduled day was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'OK   Test 8: rejected (' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + '): ' + ERROR_MESSAGE();
+END CATCH;
+
+GO
+PRINT '=== Triggers 2 / 2b: overpayment and cancelled appointments ===';
+
+DECLARE @ApptID INT, @Pay1 INT, @Pay2 INT, @Pay3 INT;
+
+-- Setup: a $200 appointment that passes trigger 1 (Ramirez, office 1, Monday 10:00)
+INSERT INTO Appointment (OfficeID, DoctorID, PatientID, ReferralID, Date_Time,
+                         AppointStatus, TotalCost, Channel, CancelReason, CancelledBy)
+VALUES (1000000, 1000000, 1000007, NULL, '2026-10-26 10:00',
+        'Scheduled', 200.00, 'Phone', NULL, NULL);
+SET @ApptID = SCOPE_IDENTITY();
+
+-- Test 9: ALLOWED - payment 1, $120 cash (total 120 of 200)
+BEGIN TRY
+    INSERT INTO Payment (AppointmentID, InstallmentNumber, PaymentDate, PayStatus)
+    VALUES (@ApptID, 1, '2026-10-14', 'Completed');
+    SET @Pay1 = SCOPE_IDENTITY();
+
+    INSERT INTO PaymentDetail (PaymentID, MethodID, AmountApplied)
+    VALUES (@Pay1, 1, 120.00);          -- MethodID 1 = Cash
+
+    PRINT 'OK   Test 9: $120 payment was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'FAIL Test 9: $120 payment was rejected: ' + ERROR_MESSAGE();
+END CATCH;
+
+-- Test 10: Alllowed - payment 2, 80 cash (exactly at the limit)
+BEGIN TRY
+    INSERT INTO Payment(AppointmentID, InstallmentNumber, PaymentDate, PayStatus)
+    VALUES(@ApptID, 2, '2026-10-20', 'Completed');
+    SET @Pay2 = SCOPE_IDENTITY();
+
+    INSERT INTO PaymentDetail(PaymentID, MethodID, AmountApplied)
+    VALUES(@Pay2, 2, 80.00);    --Method 2 = Credit Card
+
+    PRINT 'OK   Test 10: $80 payment was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'FAIL Test 10: $80 payment was rejected: ' + ERROR_MESSAGE();
+END CATCH;
+
+-- Test 11: REJECTED (50008) - 1 cent over the $200 tota
+INSERT INTO Payment(AppointmentID, InstallmentNumber, PaymentDate, PayStatus)
+VALUES(@ApptID, 3, '2026-10-22', 'Completed');
+SET @Pay3 = SCOPE_IDENTITY();
+BEGIN TRY
+    INSERT INTO PaymentDetail(PaymentID, MethodID, AmountApplied)
+    VALUES(@Pay3, 2, 00.01); 
+    PRINT 'FAIL Test 11: payment 1 cent over the total was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'OK' + ERROR_MESSAGE();
+END CATCH;
+
+-- Test 12 Allowed - Payment 1, $120 refunded
+BEGIN TRY
+    UPDATE Payment
+    SET PayStatus = 'Refunded'
+    WHERE PaymentID = @Pay1;
+    PRINT 'OK   Test 12: $120 Refund was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'FAIL Test 12: $120 Refund was rejected: ' + ERROR_MESSAGE();
+END CATCH;
+    
+--Test 13: ALLOWED - $120 on payment 3, fits after the refund (total 200)
+BEGIN TRY
+    INSERT INTO PaymentDetail(PaymentID, MethodID, AmountApplied)
+    VALUES(@Pay3, 2, 120);
+    PRINT 'OK   Test 13: $120 payment was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'FAIL Test 13: 120 payment was rejected: ' + ERROR_MESSAGE();
+END CATCH;
+
+--Test 14: REJECTED (50008) - un-refund payment 1, total would be $320
+BEGIN TRY
+    UPDATE Payment
+    SET PayStatus = 'Completed'
+    WHERE PaymentID = @Pay1;
+    PRINT 'FAIL Test 14: un-refunding payment 1 was allowed (total $320)';
+END TRY
+BEGIN CATCH
+    PRINT 'OK Test 14: rejected: ' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + ' ' + ERROR_MESSAGE();
+END CATCH;
+
+-- Test 15: REJECTED (50008) - raise payment 2 from $80 to $81, total would be $201
+BEGIN TRY
+    UPDATE PaymentDetail
+    SET AmountApplied = 81
+    WHERE PaymentID = @Pay2 AND MethodID = 2; 
+    PRINT 'FAIL Test 15: payment $1 over the total was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'OK Test 15: rejected ' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + ' ' + ERROR_MESSAGE();
+END CATCH;
+
+DECLARE @CancelledApptID INT;
+-- Setup for tests 16–17: a cancelled $150 appointment (Mon Oct 26 11:00)
+INSERT INTO Appointment (OfficeID, DoctorID, PatientID, ReferralID, Date_Time,
+                         AppointStatus, TotalCost, Channel, CancelReason, CancelledBy)
+VALUES (1000000, 1000000, 1000007, NULL, '2026-10-26 11:00',
+        'Cancelled', 150.00, 'Phone', 'No transportation available', 'Patient');
+SET  @CancelledApptID = SCOPE_IDENTITY();
+
+-- Test 16: REJECTED (50007) - completed payment on a cancelled appointment
+BEGIN TRY
+    INSERT INTO Payment (AppointmentID, InstallmentNumber, PaymentDate, PayStatus)
+    VALUES (@CancelledApptID, 1, '2026-10-14', 'Completed');
+
+    PRINT 'FAIL Test 16: a completed payment on a cancelled appointment was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'OK Test 16: ' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + ' ' + ERROR_MESSAGE();
+END CATCH;
+
+-- Test 17: ALLOWED - refunded payment on a cancelled appointment
+BEGIN TRY
+    INSERT INTO Payment (AppointmentID, InstallmentNumber, PaymentDate, PayStatus)
+    VALUES (@CancelledApptID, 1, '2026-10-14', 'Refunded');
+
+    PRINT 'OK   Test 17: Refund was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'FAIL Test 13: Refund was rejected: ' + ERROR_MESSAGE();
+END CATCH;
