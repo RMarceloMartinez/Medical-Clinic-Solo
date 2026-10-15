@@ -153,7 +153,7 @@ BEGIN TRY
     PRINT 'FAIL Test 11: payment 1 cent over the total was allowed';
 END TRY
 BEGIN CATCH
-    PRINT 'OK' + ERROR_MESSAGE();
+    PRINT 'OK Test 11: ' + ERROR_MESSAGE();
 END CATCH;
 
 -- Test 12 Allowed - Payment 1, $120 refunded
@@ -185,7 +185,7 @@ BEGIN TRY
     PRINT 'FAIL Test 14: un-refunding payment 1 was allowed (total $320)';
 END TRY
 BEGIN CATCH
-    PRINT 'OK Test 14: rejected: ' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + ' ' + ERROR_MESSAGE();
+    PRINT 'OKTest 14: rejected: ' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + ' ' + ERROR_MESSAGE();
 END CATCH;
 
 -- Test 15: REJECTED (50008) - raise payment 2 from $80 to $81, total would be $201
@@ -227,4 +227,68 @@ BEGIN TRY
 END TRY
 BEGIN CATCH
     PRINT 'FAIL Test 13: Refund was rejected: ' + ERROR_MESSAGE();
+END CATCH;
+
+--Test 18: REJECTED (50005) - cancelled appointment back to Scheduled.
+Begin TRY
+    UPDATE Appointment
+    SET AppointStatus = 'Scheduled',
+        CancelReason = NULL,
+        CancelledBy = NULL
+    WHERE AppointmentID = @CancelledApptID;
+
+    PRINT 'FAIL Test 18: reopening a cancelled appointment was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'OK Test 18: ' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + ' ' + ERROR_MESSAGE();
+END CATCH;
+
+--Test 19: ALLOWED - normal flow, Scheduled -> Completed
+Begin TRY
+    UPDATE Appointment
+    SET AppointStatus = 'Completed'
+    WHERE AppointmentID = @ApptID;
+
+    PRINT 'OK   Test 19: completing a scheduled appointment was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'FAIL Test 19: completing was rejected: ' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + ' ' + ERROR_MESSAGE();
+END CATCH;
+
+-- Test 20: REJECTED (50005) - completed appointment back to Scheduled
+Begin TRY
+    UPDATE Appointment
+    SET AppointStatus = 'Scheduled'
+    WHERE AppointmentID = @ApptID;
+
+    PRINT 'FAIL Test 20: reopening a completed appointment was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'OK Test 20: ' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + ' ' + ERROR_MESSAGE();
+END CATCH;
+
+-- Test 21: REJECTED (50005) - completed appointment to Cancelled
+Begin TRY
+    UPDATE Appointment
+    SET AppointStatus = 'Cancelled',
+        CancelReason = 'Work time conflict',
+        CancelledBy = 'Patient'
+    WHERE AppointmentID = @ApptID;
+
+    PRINT 'FAIL Test 21: cancelling a completed appointment was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'OK Test 21: ' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + ' ' + ERROR_MESSAGE();
+END CATCH;
+
+-- Test 22: ALLOWED - edit a cancelled appointment's reason (status unchanged)
+BEGIN TRY
+    UPDATE Appointment
+    SET CancelReason = 'No transportation available that day'
+    WHERE AppointmentID = @CancelledApptID;
+
+    PRINT 'OK   Test 22: editing the cancel reason was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'FAIL Test 22: editing the cancel reason was rejected (' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + '): ' + ERROR_MESSAGE();
 END CATCH;

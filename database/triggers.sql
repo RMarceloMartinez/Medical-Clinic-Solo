@@ -114,3 +114,25 @@ BEGIN
     END;
 END;
 GO
+
+CREATE OR ALTER TRIGGER TR_Appointment_StatusTransition
+ON dbo.Appointment
+AFTER UPDATE
+AS BEGIN
+SET NOCOUNT ON;
+
+    IF NOT(UPDATE(AppointStatus)) RETURN;
+
+IF EXISTS(
+    SELECT 1
+    FROM deleted AS d
+    JOIN inserted AS i ON i.AppointmentID = d.AppointmentID
+    WHERE d.AppointStatus IN('Cancelled', 'Completed')
+    AND i.AppointStatus <> d.AppointStatus
+)
+BEGIN 
+    ROLLBACK TRANSACTION;
+    THROW 50005, 'A completed or cancelled appointment cannot change status.', 1;
+    END;
+END;
+GO
