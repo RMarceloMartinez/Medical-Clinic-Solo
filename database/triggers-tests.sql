@@ -290,5 +290,83 @@ BEGIN TRY
     PRINT 'OK   Test 22: editing the cancel reason was allowed';
 END TRY
 BEGIN CATCH
-    PRINT 'FAIL Test 22: editing the cancel reason was rejected (' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + '): ' + ERROR_MESSAGE();
+    PRINT 'FAIL Test 22: editing the cancel reason was rejected: ' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + ' ' + ERROR_MESSAGE();
 END CATCH;
+
+GO
+PRINT '=== Trigger 4: referral must be issued by the patient''s primary  ===';
+DECLARE @RefID INT;
+-- Test 23: ALLOWED - Olivia's primary (Ramirez) refers her to Chen
+BEGIN TRY
+    INSERT INTO Referral (PatientID, SpecialistID, PrimaryID, DateIssued, RefStatus)
+    VALUES (1000006, 1000001, 1000000, '2026-10-14','Scheduled');
+    SET @RefID = SCOPE_IDENTITY();
+    PRINT 'OK   Test 23: Referral was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'FAIL Test 23: Referral was rejected: ' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + ' ' + ERROR_MESSAGE();
+END CATCH;
+
+-- Test 24: REJECTED - Chen (Olivia's specialist, not primary) refers her to Patel
+BEGIN TRY
+    INSERT INTO Referral (PatientID, SpecialistID, PrimaryID, DateIssued, RefStatus)
+    VALUES (1000006, 1000002, 1000001, '2026-10-14','Scheduled');
+
+    PRINT 'FAIL Test 24: non-primary referral was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'OK Test 24: rejected ' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + ' ' + ERROR_MESSAGE();
+END CATCH;
+
+-- Test 25: REJECTED - UPDATE test 23's referral so Patel (not primary) is the issuer
+BEGIN TRY
+    UPDATE Referral
+    SET PrimaryID = 1000002
+    WHERE ReferralID = @RefID;
+
+    PRINT 'FAIL Test 25: update to non-primary issuer was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'OK Test 25: rejected ' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + ' ' + ERROR_MESSAGE();
+END CATCH;
+
+-- Test 26: ALLOWED - change only RefStatus (shortcut skips the check), then restore it
+DECLARE @Rows INT;
+BEGIN TRY
+    UPDATE Referral
+    SET RefStatus = 'Cancelled'
+    WHERE ReferralID = @RefID;
+    SET @Rows = @@ROWCOUNT;              -- capture right away; the next statement resets it
+
+    IF @Rows = 1
+        PRINT 'OK   Test 26: status-only update was allowed';
+    ELSE
+        PRINT 'FAIL Test 26: no referral updated (is @RefID NULL?)';
+
+    UPDATE Referral                      -- restore, so trigger 3 tests can use this referral
+    SET RefStatus = 'Scheduled'
+    WHERE ReferralID = @RefID;
+END TRY
+BEGIN CATCH
+    PRINT 'FAIL Test 26: status-only update was rejected (' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + '): ' + ERROR_MESSAGE();
+END CATCH;
+
+-- Test 27: REJECTED - multi-row insert, one good row (Ethan / Ramirez -> Patel)
+--          and one bad row (Olivia / Chen -> Patel); the whole statement must fail
+DECLARE @EthanRefs INT;
+BEGIN TRY
+    INSERT INTO Referral (PatientID, SpecialistID, PrimaryID, DateIssued, RefStatus)
+    VALUES (1000007, 1000002, 1000000, '2026-10-14', 'Scheduled'),   -- good
+           (1000006, 1000002, 1000001, '2026-10-14', 'Scheduled');   -- bad
+
+    PRINT 'FAIL Test 27: multi-row insert with a bad row was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'OK   Test 27: rejected (' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + '): ' + ERROR_MESSAGE();
+END CATCH;
+
+SELECT @EthanRefs = COUNT(*) FROM Referral WHERE PatientID = 1000007;
+IF @EthanRefs = 0
+    PRINT 'OK   Test 27: good row was rolled back too (Ethan referrals = 0)';
+ELSE
+    PRINT 'FAIL Test 27: good row was saved (Ethan referrals = ' + CAST(@EthanRefs AS VARCHAR(10)) + ')';

@@ -156,7 +156,7 @@ IF EXISTS(
 )
 BEGIN 
     ROLLBACK TRANSACTION;
-    THROW 50004, 'Only the patient primary doctor can issue a referral.', 1;
+    THROW 50004, 'Only the patient''s primary doctor can issue a referral.', 1;
     END;
 END;
 GO
