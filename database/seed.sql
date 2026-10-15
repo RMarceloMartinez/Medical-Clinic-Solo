@@ -2,20 +2,21 @@ USE MedicalClinic;
 GO
 SET QUOTED_IDENTIFIER ON;
 GO
-INSERT INTO Office(BuildingNum,SuiteNum,Street,City,State,ZipCode,Country,Phone,OpeningTime,ClosingTime)
-VALUES('4500', '210', 'Main St', 'Houston', 'Texas', '77002', 'USA', '7135550100', '08:00', '17:00'),
-    ('1200', NULL,  'Westheimer Rd', 'Houston', 'Texas', '77006', 'USA', '7135550200', '09:00', '18:00');
-
-INSERT INTO Member (SSN, FirstName, MiddleName, LastName, ApartmentNum, HouseNum, Street, City, State, ZipCode, Country, Phone, Sex, DateOfBirth, Email)
+INSERT INTO Office (StreetAddress, SuiteNum, City, State, ZipCode, Country, Phone, OpeningTime, ClosingTime)
 VALUES
-    ('900-10-0001', 'Elena',  'Maria',  'Ramirez', NULL,  '1820', 'Bissonnet St',   'Houston', 'Texas', '77005', 'USA', '7135550101', 'F', '1978-04-12', 'elena.ramirez@example.com'),
-    ('900-10-0002', 'Marcus', NULL,     'Chen',    '12B', '2600', 'Kirby Dr',       'Houston', 'Texas', '77098', 'USA', '7135550102', 'M', '1982-09-03', 'marcus.chen@example.com'),
-    ('900-10-0003', 'Priya',  'Anand',  'Patel',   NULL,  '5410', 'Braeswood Blvd', 'Houston', 'Texas', '77096', 'USA', '7135550103', 'F', '1985-01-27', 'priya.patel@example.com'),
-    ('900-10-0004', 'Daniel', 'James',  'Brooks',  '304', '900',  'Montrose Blvd',  'Houston', 'Texas', '77006', 'USA', '7135550104', 'M', '1990-06-18', 'daniel.brooks@example.com'),
-    ('900-10-0005', 'Sofia',  NULL,     'Nguyen',  NULL,  '7731', 'Bellaire Blvd',  'Houston', 'Texas', '77036', 'USA', '7135550105', 'F', '1996-11-02', 'sofia.nguyen@example.com'),
-    ('900-10-0006', 'James',  'Robert', 'Carter',  NULL,  '3315', 'Westheimer Rd',  'Houston', 'Texas', '77027', 'USA', '7135550106', 'M', '1975-02-20', 'james.carter@example.com'),
-    ('900-10-0007', 'Olivia', 'Grace',  'Bennett', NULL,  '418',  'Heights Blvd',   'Houston', 'Texas', '77007', 'USA', '7135550107', 'F', '1992-07-30', 'olivia.bennett@example.com'),
-    ('900-10-0008', 'Ethan',  NULL,     'Walker',  '2A',  '1500', 'Louisiana St',   'Houston', 'Texas', '77002', 'USA', '7135550108', 'M', '1988-12-05', 'ethan.walker@example.com');
+    ('4500 Main St',       '210', 'Houston', 'Texas', '77002', 'USA', '7135550100', '08:00', '17:00'),
+    ('1200 Westheimer Rd', NULL,  'Houston', 'Texas', '77006', 'USA', '7135550200', '09:00', '18:00');
+
+INSERT INTO Member (SSN, FirstName, MiddleName, LastName, StreetAddress, ApartmentNum, City, State, ZipCode, Country, Phone, Sex, DateOfBirth, Email)
+VALUES
+    ('900-10-0001', 'Elena',  'Maria',  'Ramirez', '1820 Bissonnet St',   NULL,  'Houston', 'Texas', '77005', 'USA', '7135550101', 'F', '1978-04-12', 'elena.ramirez@example.com'),
+    ('900-10-0002', 'Marcus', NULL,     'Chen',    '2600 Kirby Dr',       '12B', 'Houston', 'Texas', '77098', 'USA', '7135550102', 'M', '1982-09-03', 'marcus.chen@example.com'),
+    ('900-10-0003', 'Priya',  'Anand',  'Patel',   '5410 Braeswood Blvd', NULL,  'Houston', 'Texas', '77096', 'USA', '7135550103', 'F', '1985-01-27', 'priya.patel@example.com'),
+    ('900-10-0004', 'Daniel', 'James',  'Brooks',  '900 Montrose Blvd',   '304', 'Houston', 'Texas', '77006', 'USA', '7135550104', 'M', '1990-06-18', 'daniel.brooks@example.com'),
+    ('900-10-0005', 'Sofia',  NULL,     'Nguyen',  '7731 Bellaire Blvd',  NULL,  'Houston', 'Texas', '77036', 'USA', '7135550105', 'F', '1996-11-02', 'sofia.nguyen@example.com'),
+    ('900-10-0006', 'James',  'Robert', 'Carter',  '3315 Westheimer Rd',  NULL,  'Houston', 'Texas', '77027', 'USA', '7135550106', 'M', '1975-02-20', 'james.carter@example.com'),
+    ('900-10-0007', 'Olivia', 'Grace',  'Bennett', '418 Heights Blvd',    NULL,  'Houston', 'Texas', '77007', 'USA', '7135550107', 'F', '1992-07-30', 'olivia.bennett@example.com'),
+    ('900-10-0008', 'Ethan',  NULL,     'Walker',  '1500 Louisiana St',   '2A',  'Houston', 'Texas', '77002', 'USA', '7135550108', 'M', '1988-12-05', 'ethan.walker@example.com');
 
 INSERT INTO Employee(EmployeeID, HiringDate)
 VALUES
