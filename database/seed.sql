@@ -47,10 +47,17 @@ VALUES
     (1000007);
 
 -- Doctor schedules (weekday each doctor works at each office)
-INSERT INTO DoctorSchedule (DoctorID, OfficeID, DayOfWeek) VALUES
+INSERT INTO DoctorSchedule (DoctorID, OfficeID, DayOfWeek) 
+VALUES
     (1000000, 1000000, 'Mon'),   -- Ramirez, office 1
     (1000000, 1000000, 'Wed'),
     (1000000, 1000001, 'Fri'),   -- Ramirez, office 2
     (1000001, 1000001, 'Tue'),   -- Chen, office 2
     (1000001, 1000001, 'Thu'),
     (1000002, 1000000, 'Thu');   -- Patel, office 1
+
+INSERT INTO PatientDoctor(PatientID, DoctorID, RolePlayed, StartDate)
+VALUES
+    (1000006, 1000000, 'Primary', '2024-03-01'),
+    (1000007, 1000000, 'Primary', '2025-01-15'),
+    (1000006, 1000001, 'Specialist', '2026-09-10');
