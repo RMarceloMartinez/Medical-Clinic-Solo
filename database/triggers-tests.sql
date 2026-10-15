@@ -370,3 +370,70 @@ IF @EthanRefs = 0
     PRINT 'OK   Test 27: good row was rolled back too (Ethan referrals = 0)';
 ELSE
     PRINT 'FAIL Test 27: good row was saved (Ethan referrals = ' + CAST(@EthanRefs AS VARCHAR(10)) + ')';
+
+PRINT '=== Trigger 3: specialist visits need a valid referral ===';
+DECLARE @SpecApptID INT;
+
+-- Test 28: ALLOWED - Olivia sees Chen (specialist) with test 23's open referral
+BEGIN TRY
+    INSERT INTO Appointment (PatientID, DoctorID, OfficeID, ReferralID, Date_Time, AppointStatus, TotalCost, Channel, CancelReason, CancelledBy)
+    VALUES (1000006, 1000001, 1000001, @RefID, '2026-10-20 10:00', 'Scheduled', 150.00, 'Phone', NULL, NULL);
+    SET @SpecApptID = SCOPE_IDENTITY();
+    PRINT 'OK   Test 28: specialist visit with a valid referral was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'FAIL Test 28: rejected (' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + '): ' + ERROR_MESSAGE();
+END CATCH;
+
+-- Test 29: REJECTED - Ethan sees Chen with no referral
+BEGIN TRY
+    INSERT INTO Appointment (PatientID, DoctorID, OfficeID, ReferralID, Date_Time, AppointStatus, TotalCost, Channel, CancelReason, CancelledBy)
+    VALUES (1000007, 1000001, 1000001, NULL, '2026-10-20 11:00', 'Scheduled', 150.00, 'Phone', NULL, NULL);
+    PRINT 'FAIL Test 29: specialist visit without a referral was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'OK   Test 29: rejected (' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + '): ' + ERROR_MESSAGE();
+END CATCH;
+
+-- Test 30: REJECTED - Olivia sees Patel; her referral is to Chen, not Patel
+BEGIN TRY
+    INSERT INTO Appointment (PatientID, DoctorID, OfficeID, ReferralID, Date_Time, AppointStatus, TotalCost, Channel, CancelReason, CancelledBy)
+    VALUES (1000006, 1000002, 1000000, NULL, '2026-10-22 10:00', 'Scheduled', 150.00, 'Phone', NULL, NULL);
+    PRINT 'FAIL Test 30: visit to a specialist without their referral was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'OK   Test 30: rejected (' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + '): ' + ERROR_MESSAGE();
+END CATCH;
+
+-- Test 31: ALLOWED - cancelled specialist visit without a referral (cancelled is exempt)
+BEGIN TRY
+    INSERT INTO Appointment (PatientID, DoctorID, OfficeID, ReferralID, Date_Time, AppointStatus, TotalCost, Channel, CancelReason, CancelledBy)
+    VALUES (1000007, 1000001, 1000001, NULL, '2026-10-20 12:00', 'Cancelled', 150.00, 'Phone', 'Patient rescheduled', 'Patient');
+    PRINT 'OK   Test 31: cancelled specialist visit was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'FAIL Test 31: rejected (' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + '): ' + ERROR_MESSAGE();
+END CATCH;
+
+-- Test 32: REJECTED - UPDATE test 28's visit so Ethan (no referral) is the patient
+BEGIN TRY
+    UPDATE Appointment
+    SET PatientID = 1000007
+    WHERE AppointmentID = @SpecApptID;
+    PRINT 'FAIL Test 32: changing to a patient without a referral was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'OK   Test 32: rejected (' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + '): ' + ERROR_MESSAGE();
+END CATCH;
+
+-- Test 33: REJECTED - Olivia's referral to Chen is cancelled, so a new Chen visit fails
+UPDATE Referral SET RefStatus = 'Cancelled' WHERE ReferralID = @RefID;   -- outside TRY
+BEGIN TRY
+    INSERT INTO Appointment (PatientID, DoctorID, OfficeID, ReferralID, Date_Time, AppointStatus, TotalCost, Channel, CancelReason, CancelledBy)
+    VALUES (1000006, 1000001, 1000001, NULL, '2026-10-22 10:00', 'Scheduled', 150.00, 'Phone', NULL, NULL);
+    PRINT 'FAIL Test 33: visit with a cancelled referral was allowed';
+END TRY
+BEGIN CATCH
+    PRINT 'OK   Test 33: rejected (' + CAST(ERROR_NUMBER() AS VARCHAR(10)) + '): ' + ERROR_MESSAGE();
+END CATCH;
+UPDATE Referral SET RefStatus = 'Scheduled' WHERE ReferralID = @RefID;   -- restore, outside TRY

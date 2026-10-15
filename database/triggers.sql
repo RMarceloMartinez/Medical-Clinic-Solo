@@ -160,3 +160,36 @@ BEGIN
     END;
 END;
 GO
+
+CREATE OR ALTER TRIGGER TR_Appointment_SpecialistReferral
+ON dbo.Appointment
+AFTER INSERT, UPDATE
+AS BEGIN
+SET NOCOUNT ON;
+    IF NOT(UPDATE(PatientID) OR UPDATE(DoctorID) OR UPDATE(Date_Time) OR UPDATE(AppointStatus)) RETURN;
+IF EXISTS(
+    SELECT 1
+    FROM inserted AS i
+    WHERE i.AppointStatus <> 'Cancelled'
+    AND NOT EXISTS (
+                    SELECT 1
+                    FROM PatientDoctor AS pd
+                    WHERE i.PatientID = pd.PatientID
+                    AND i.DoctorID = pd.DoctorID
+                    AND pd.RolePlayed = 'Primary'
+                    )
+    AND NOT EXISTS (
+                    SELECT 1
+                    FROM Referral AS r
+                    WHERE r.PatientID = i.PatientID
+                    AND r.SpecialistID = i.DoctorID
+                    AND r.RefStatus = 'Scheduled'
+                    AND r.DateIssued <= CAST(i.Date_Time AS DATE)
+                    )
+)
+BEGIN 
+    ROLLBACK TRANSACTION;
+    THROW 50003, 'Seeing a specialist requires a valid referral from the patient''s primary doctor.', 1;
+    END;
+END;
+GO
